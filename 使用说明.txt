@@ -1,0 +1,19 @@
+小白 2080 · 真正自由问答版
+
+这是可运行的网页 + AI 服务端，不是只有关键词回复的静态页面。
+
+1. 需要 Python 3 和 OpenAI API Key（API 按使用量计费，ChatGPT 订阅不等于 API 额度）。
+2. macOS/Linux 终端：
+   export OPENAI_API_KEY="你的密钥"
+   export OPENAI_MODEL="你有权限使用的模型名"
+   python3 server.py
+3. Windows PowerShell：
+   $env:OPENAI_API_KEY="你的密钥"
+   $env:OPENAI_MODEL="你有权限使用的模型名"
+   python server.py
+4. 浏览器打开 http://localhost:8000
+
+如模型 gpt-6 不在你的 API 账号可用列表，请将 OPENAI_MODEL 设置为实际可用的模型。
+不要把 API Key 放到 index.html、公开仓库或发给别人。
+在 iPad 上体验真正 AI 对话需要把服务端部署到带 HTTPS 的主机；仅打开 index.html 文件会进入明确标注的离线演示模式。
+公开部署前应增加用户鉴权、限流、费用上限和日志隐私保护。
