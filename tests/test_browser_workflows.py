@@ -91,11 +91,13 @@ class Workflows(unittest.TestCase):
     def test_learning_trace_captured_once(self):
         self.go('learning')
         self.page.locator('[data-learning-feature="think"]').click()
-        self.page.fill('#studyChatInput', '我知道日照原理，但不会验证模型')
-        self.page.locator('#studyChatForm button').click()
+        self.page.click('#copilotLearningEntry')
+        self.page.fill('#chatText', '我知道日照原理，但不会验证模型')
+        self.page.locator('#chatForm button').click()
         rows = self.page.evaluate("JSON.parse(localStorage.getItem('xb2080_learning_trace_v1'))")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]['text'], '我知道日照原理，但不会验证模型')
+        self.go('learning')
         self.page.locator('[data-learning-feature="trace"]').click()
         self.page.wait_for_selector('#learningTraceItems')
         self.assertIn('日照原理', self.page.locator('#learningTraceItems').inner_text())
@@ -121,6 +123,7 @@ class Workflows(unittest.TestCase):
 
     def test_growth_requires_evidence_and_persists_points(self):
         self.go('growth')
+        self.page.locator('#growthIncentives').evaluate('(e)=>e.closest("details").open=true')
         button = self.page.locator('#growthExplores button').first
         button.click()
         self.assertEqual(self.page.locator('#growthPoints').text_content(), '0')
@@ -156,6 +159,7 @@ class Workflows(unittest.TestCase):
         self.page.locator('#talentSchoolConsent').check()
         self.page.locator('#talentEmployerConsent').check()
         self.page.evaluate('saveTalentProfile()')
+        self.page.locator('#enterpriseSimulation').evaluate('(e)=>e.open=true')
         self.page.fill('#talentJobQuery', '校园日照测试')
         self.page.evaluate('searchTalentMatches()')
         self.assertIn('当前用户', self.page.locator('#talentMatchResults').inner_text())
@@ -163,6 +167,7 @@ class Workflows(unittest.TestCase):
         self.page.reload()
         self.go('growth')
         self.assertFalse(self.page.locator('#talentEmployerConsent').is_checked())
+        self.page.locator('#enterpriseSimulation').evaluate('(e)=>e.open=true')
         self.page.fill('#talentJobQuery', '校园日照测试')
         self.page.evaluate('searchTalentMatches()')
         self.assertNotIn('当前用户', self.page.locator('#talentMatchResults').inner_text())
@@ -184,6 +189,8 @@ class Workflows(unittest.TestCase):
     def test_evidence_can_reach_aid_threshold_without_repeated_clicks(self):
         self.go('growth')
         for group in ['growthArchives', 'growthExplores', 'growthPractices']:
+            if group=='growthExplores':
+                self.page.locator('#growthIncentives').evaluate('(e)=>e.closest("details").open=true')
             cards = self.page.locator('#'+group+' .growth-item')
             for card in cards.all():
                 card.locator('textarea').fill('我完成了校园观察与资料核对，留下问题、行动过程、反馈以及下一次要验证的方向。')
@@ -193,13 +200,13 @@ class Workflows(unittest.TestCase):
         self.assertIn('达到', self.page.locator('#aidStatus').text_content())
 
     def test_emotional_chat_accepts_multiple_turns(self):
-        self.go('experience')
+        self.page.evaluate("openCopilot('experience')")
         for message in ['我今天有点累', '我想先休息一下']:
-            self.page.fill('#functionChatText', message)
-            self.page.locator('#functionChatForm button[type=submit]').click()
-            self.page.wait_for_function('!functionChatBusy')
-        self.assertEqual(self.page.locator('#functionChatMessages .fchat-msg.user').count(), 2)
-        self.assertEqual(self.page.locator('#functionChatMessages .fchat-msg.bot').count(), 3)
+            self.page.fill('#chatText', message)
+            self.page.locator('#chatForm button[type=submit]').click()
+            self.page.wait_for_function('!document.getElementById("chatText").disabled')
+        self.assertEqual(self.page.locator('#chatMessages .msg.user').count(), 2)
+        self.assertEqual(self.page.locator('#chatMessages .msg.bot').count(), 3)
 
     def test_step_targets_and_mobile_width(self):
         for ident in ['learning', 'growth', 'experience', 'status']:
