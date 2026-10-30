@@ -15,6 +15,7 @@ class VoiceWorkflows(unittest.TestCase):
         self.page.route('**/api/status', lambda r: r.fulfill(json={'ready': True, 'voice': {'transcribe': True, 'speech': True}}))
         self.page.reload()
         self.page.wait_for_function("document.querySelector('.ai-banner').textContent.includes('已配置')")
+        self.page.locator('.voice-fallback').evaluate('(e)=>e.open=true')
 
     def test_shared_context_preserves_separate_conversations(self):
         self.page.evaluate("openCopilot('learning','我需要理解日照分析')")

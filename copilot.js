@@ -17,8 +17,10 @@
     if (who==='bot') latestReply=text;
   }
   window.bubble=(who,text)=>add(who,text);
+  window.getCopilotState=()=>({busy,context,ready});
   function switchContext(next) {
     if (!names[next]) return;
+    if(next!==context)window.dispatchEvent(new Event('copilot:contextchange'));
     if (busy && next!==context) { $('copilotModule').value=context; tell('小白正在回答。请稍等，或先重启当前对话。'); return; }
     stopSpeech(); context=next; $('copilotModule').value=next;
     $('chatMessages').replaceChildren(); latestReply='';
@@ -45,7 +47,7 @@
     } catch(e) { /* Conversation works even without persistent storage. */ }
   }
   window.submitChat=async function(text) {
-    const value=String(text||'').trim(); if(!value||busy)return;
+    const value=String(text||'').trim(); if(!value||busy)return;if(window.xiaobaiRealtime?.isActive()){tell('实时通话中请直接说话；结束通话后可以发送文字。');return;}
     stopSpeech(); traceLearning(value);
     if(!ready) {
       baseDemo(value);
@@ -67,6 +69,7 @@
     } finally { pending.remove();busy=false;requestController=null;$('chatText').disabled=false;$('copilotModule').disabled=false; }
   };
   window.restartChat=()=>{
+    window.xiaobaiRealtime?.stop();
     requestController?.abort();stopSpeech();sessions[context]=[];switchContext(context);
   };
   document.querySelectorAll('[data-copilot-action]').forEach(b=>b.addEventListener('click',()=>{
@@ -151,6 +154,16 @@
   window.addEventListener('pagehide',()=>{discardRecording();stopSpeech();});
   document.addEventListener('visibilitychange',()=>{if(document.hidden){if(recording)stopRecording();stopSpeech();}});
   window.addEventListener('modulechange',e=>{if(e.detail.id!=='chat'){if(acquiring)discardRecording();else if(recording)stopRecording();stopSpeech();}});
+
+  window.addEventListener('realtime:starting',()=>{
+    discardRecording();stopSpeech();
+    ['voiceRecord','voiceTranscribe','voicePlay','voiceAuto','voiceMode','voiceTone','copilotModule','chatText'].forEach(id=>$(id).disabled=true);
+    tell('正在进入实时语音。结束通话后可以继续使用录音和文字。');
+  });
+  window.addEventListener('realtime:ended',()=>{
+    ['voiceRecord','voiceTranscribe','voicePlay','voiceAuto','voiceMode','voiceTone','copilotModule','chatText'].forEach(id=>$(id).disabled=busy);
+    tell('实时通话已结束；你可以继续打字或录音转文字。');
+  });
   switchContext('general');
   fetch('/api/status',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(j=>{
     ready=!!j.ready;voiceReady=!!j.voice?.transcribe&&!!j.voice?.speech;

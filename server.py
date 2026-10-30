@@ -13,6 +13,7 @@ KEY = os.environ.get('OPENAI_API_KEY', '').strip()
 MODEL = os.environ.get('OPENAI_MODEL', 'gpt-6').strip()
 TRANSCRIBE_MODEL = os.environ.get('OPENAI_TRANSCRIBE_MODEL', 'gpt-4o-mini-transcribe')
 SPEECH_MODEL = os.environ.get('OPENAI_SPEECH_MODEL', 'gpt-4o-mini-tts')
+REALTIME_MODEL = os.environ.get('OPENAI_REALTIME_MODEL', 'gpt-realtime-mini')
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
 AUDIO_SLOTS = threading.BoundedSemaphore(2)
 SYSTEM="""你是2080年华中师范大学原型未来校园的智能教育伙伴“小白”，陪伴19岁的华诗诗。用自然、有温度、清醒、不过度煽情的简体中文交谈。你不是客服，也不是套话机器人。优先理解用户当下真实问题，回答要有内容、准确、具体；如果是学术问题，认真解释和举例；如果是情绪问题，先尊重感受，避免未经许可的心理诊断，再提供可选的微小行动；如果是人生探索，不替学生下结论，鼓励低风险真实探索。允许不同意、追问、纠错和拒绝。不要每次都强行问问题，也不要每次都提到2080或诗诗。对于不确定的事实说明不确定。不得声称已读取设备传感器、隐私或校园数据。默认回复简洁但有深度，必要时分步骤。"""
@@ -78,11 +79,11 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/api/status':
             return self.send_json(200, {'ready': bool(KEY), 'model': MODEL if KEY else None,
-                'voice': {'transcribe': bool(KEY), 'speech': bool(KEY)}})
+                'voice': {'transcribe': bool(KEY), 'speech': bool(KEY), 'realtime': bool(KEY)}})
         return super().do_GET()
 
     def do_POST(self):
-        if self.path not in ('/api/chat', '/api/transcribe', '/api/speech'):
+        if self.path not in ('/api/chat', '/api/transcribe', '/api/speech', '/api/realtime/session'):
             return self.send_json(404, {'error': 'Not found'})
         if not KEY:
             return self.send_json(503, {'error': '模型服务尚未配置；可以继续使用文字演示与设备朗读。'})
@@ -95,6 +96,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.chat()
             if self.path == '/api/transcribe':
                 return self.transcribe()
+            if self.path == '/api/realtime/session':
+                return self.realtime_session()
             return self.speech()
         except BadRequest as exc:
             return self.send_json(400, {'error': str(exc)})
@@ -151,6 +154,41 @@ class Handler(SimpleHTTPRequestHandler):
         if not text:
             raise BadRequest('没有识别到清晰语音，请重新录制或直接打字')
         return self.send_json(200, {'text': text[:4000]})
+
+    def realtime_session(self):
+        data = self.read_json()
+        module = data.get('module', 'general')
+        voice = data.get('voice', 'cedar')
+        if not isinstance(module, str) or module not in MODULES:
+            raise BadRequest('未知对话情境')
+        if voice not in ('cedar', 'marin'):
+            raise BadRequest('请选择支持的声音')
+        # The regular API key never reaches the browser. It receives only a short-lived credential.
+        payload = {
+            'expires_after': {'anchor': 'created_at', 'seconds': 60},
+            'session': {
+                'type': 'realtime', 'model': REALTIME_MODEL,
+                'instructions': SYSTEM + '\n' + MODULES[module] +
+                    '\n当前为实时语音对话。用自然、简洁的中文回应，每次先说清一个重点；'
+                    '允许学生打断，先听完再回应。不声称已经预约、修改日程或分享资料。',
+                'output_modalities': ['audio'], 'max_output_tokens': 600,
+                'audio': {
+                    'input': {
+                        'transcription': {'model': TRANSCRIBE_MODEL, 'language': 'zh'},
+                        'turn_detection': {'type': 'server_vad', 'threshold': 0.5,
+                            'prefix_padding_ms': 300, 'silence_duration_ms': 600,
+                            'create_response': True, 'interrupt_response': True},
+                    },
+                    'output': {'voice': voice},
+                },
+            },
+        }
+        result = json.loads(request_upstream('realtime/client_secrets', json.dumps(payload).encode(), timeout=30))
+        secret = result.get('value')
+        if not isinstance(secret, str) or not secret:
+            raise ValueError('Missing ephemeral credential')
+        return self.send_json(200, {'client_secret': secret,
+            'expires_at': result.get('expires_at'), 'model': REALTIME_MODEL})
 
     def speech(self):
         data = self.read_json()

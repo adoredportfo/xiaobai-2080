@@ -107,6 +107,32 @@ class VoiceAPI(unittest.TestCase):
         self.assertEqual(code, 502)
         self.assertNotIn(b'private credential', result)
 
+    @patch.object(server, 'KEY', 'test-not-a-real-key')
+    @patch.object(server, 'request_upstream')
+    def test_realtime_uses_short_lived_credentials_and_server_owned_config(self, upstream):
+        upstream.return_value = b'{"value":"ek_short_test","expires_at":123,"untrusted":"not forwarded"}'
+        code, _, body = self.request('/api/realtime/session', json.dumps({'module': 'growth', 'voice': 'cedar', 'model': 'ignored', 'instructions': 'ignored'}).encode())
+        self.assertEqual(code, 200)
+        result = json.loads(body)
+        self.assertEqual(set(result), {'client_secret', 'expires_at', 'model'})
+        self.assertEqual(result['client_secret'], 'ek_short_test')
+        self.assertNotIn(server.KEY, body.decode())
+        self.assertEqual(upstream.call_args.args[0], 'realtime/client_secrets')
+        payload = json.loads(upstream.call_args.args[1])
+        self.assertEqual(payload['expires_after']['seconds'], 60)
+        self.assertEqual(payload['session']['model'], server.REALTIME_MODEL)
+        self.assertIn('成长发展', payload['session']['instructions'])
+        self.assertNotIn('ignored', payload['session']['instructions'])
+        self.assertTrue(payload['session']['audio']['input']['turn_detection']['interrupt_response'])
+        self.assertTrue(payload['session']['audio']['input']['turn_detection']['create_response'])
+
+    @patch.object(server, 'KEY', 'test-not-a-real-key')
+    @patch.object(server, 'request_upstream')
+    def test_realtime_rejects_invalid_context_and_voice(self, upstream):
+        for body in [b'{"module":[]}', b'{"module":"made-up"}', b'{"voice":"made-up"}']:
+            self.assertEqual(self.request('/api/realtime/session', body)[0], 400)
+        upstream.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

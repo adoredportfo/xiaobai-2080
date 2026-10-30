@@ -26,3 +26,12 @@
 - 复用现有 OPENAI_API_KEY。自然语音与转写会产生对应API费用；需账号具备音频模型权限。默认模型：gpt-4o-mini-transcribe、gpt-4o-mini-tts。可通过 OPENAI_TRANSCRIBE_MODEL、OPENAI_SPEECH_MODEL 覆盖。
 - 积分、企业检索与饮食运动工具保留在可选折叠区；成长档案和真实实践结果为主线。
 - 测试：python3 -m unittest discover -s tests -v。浏览器测试需要Playwright和Chromium，服务运行本身仍只使用Python标准库。
+
+实时语音（WebRTC）
+- 在“与小白对话”选择情境与声音后，点击“开始实时对话”。允许麦克风后可以连续说话，停顿后自动回应；无需逐句录音或发送。
+- 通过OpenAI Realtime API的服务端VAD判断说话轮次，支持说话打断、手动打断、麦克风静音、实时字幕与结束通话。字幕可能有识别误差，不自动归档。
+- 浏览器只接收60秒有效的短期会话凭据；正式API密钥留在服务端。短期凭据到期只限制建立新连接，不会自动结束已建立通话。
+- 默认模型gpt-realtime-mini，可通过OPENAI_REALTIME_MODEL覆盖；沿用现有API密钥，账号需要具备实时模型权限。按实时语音使用量计费。
+- 每次通话最多15分钟；退出对话页、切换情境、页面进入后台或连接失败时停止媒体轨道。浏览器阻止自动播放时点击“播放通话声音”。
+- 如网络不支持WebRTC或无法连接，可展开“录音转文字 / 播放文字回复”继续使用。iPad需要较新的Safari/Chrome和HTTPS；后台自动结束通话后需手动重新连接。
+- 官方接入参考：https://developers.openai.com/api/docs/guides/voice-webrtc?api=realtime
