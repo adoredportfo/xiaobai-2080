@@ -6,6 +6,28 @@
   const sessions = Object.fromEntries(Object.keys(names).map(id => [id, []]));
   let context = 'general', ready = false, voiceReady = false, busy = false;
   let latestReply = '', requestController = null;
+  const CHAT_KEY='xb2080_chat_history_optin_v1';
+  let rememberChats=false;
+  const rememberLabel=document.createElement('label');
+  rememberLabel.className='ss-inline';
+  rememberLabel.innerHTML='<input type="checkbox" id="rememberCopilotChats"> 自愿在本机保存文字对话（可能含私人内容；实时语音字幕不保存）';
+  document.querySelector('.copilot-context').append(rememberLabel);
+  const historyState=document.createElement('p');historyState.id='copilotHistoryState';historyState.setAttribute('role','status');
+  document.querySelector('.copilot-context').append(historyState);
+  function saveChatHistory(){
+    if(!rememberChats)return;
+    try{const bounded=Object.fromEntries(Object.entries(sessions).map(([k,v])=>[k,v.slice(-100)]));localStorage.setItem(CHAT_KEY,JSON.stringify({version:1,sessions:bounded}));historyState.textContent='文字对话已保存到本机；取消勾选可删除持久副本。'}
+    catch(e){historyState.textContent='对话保存失败，本次仍可聊天；刷新可能丢失。'}
+  }
+  try{
+    const saved=JSON.parse(localStorage.getItem(CHAT_KEY)||'null');
+    if(saved?.version===1&&saved.sessions){for(const k of Object.keys(sessions)){const rows=saved.sessions[k];if(Array.isArray(rows))sessions[k]=rows.filter(m=>['user','assistant'].includes(m.role)&&typeof m.content==='string').slice(-100).map(m=>({role:m.role,content:m.content.slice(0,16000)}));}rememberChats=true;$('rememberCopilotChats').checked=true;historyState.textContent='已恢复此前主动保存的本机文字对话。';}
+  }catch(e){historyState.textContent='本机对话备份无法读取；不会自动覆盖。';}
+  $('rememberCopilotChats').addEventListener('change',()=>{
+    rememberChats=$('rememberCopilotChats').checked;
+    if(rememberChats)saveChatHistory();else{try{localStorage.removeItem(CHAT_KEY);historyState.textContent='本机持久副本已删除；当前页面对话仍在，关闭后清除。'}catch(e){historyState.textContent='无法删除本机副本，请在浏览器网站设置中清除数据。';}}
+  });
+
   const baseBubble = window.bubble, baseDemo = window.submitChat;
   const status = document.createElement('div');
   status.className = 'ai-banner offline'; status.textContent = '正在检查小白连接…';
@@ -13,7 +35,7 @@
   function tell(text) { $('voiceStatus').textContent = text; }
   function add(who, text, record=true) {
     baseBubble(who,text);
-    if (record) sessions[context].push({role:who==='user'?'user':'assistant',content:text});
+    if (record) {sessions[context].push({role:who==='user'?'user':'assistant',content:text});saveChatHistory();}
     if (who==='bot') latestReply=text;
   }
   window.bubble=(who,text)=>add(who,text);
@@ -70,7 +92,7 @@
   };
   window.restartChat=()=>{
     window.xiaobaiRealtime?.stop();
-    requestController?.abort();stopSpeech();sessions[context]=[];switchContext(context);
+    requestController?.abort();stopSpeech();sessions[context]=[];saveChatHistory();switchContext(context);
   };
   document.querySelectorAll('[data-copilot-action]').forEach(b=>b.addEventListener('click',()=>{
     const last=[...sessions[context]].reverse().find(m=>m.role==='user');
