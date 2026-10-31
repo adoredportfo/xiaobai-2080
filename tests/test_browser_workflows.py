@@ -88,6 +88,29 @@ class Workflows(unittest.TestCase):
         self.page.locator('[data-plan-step]').nth(1).check()
         self.assertEqual(self.page.locator('#studyPlanReview').count(), 1)
 
+    def test_confirmed_learning_evidence_reaches_growth_once(self):
+        self.go('learning')
+        self.page.fill('#learnGoal', '完成校园日照观察')
+        self.page.click('#makeStudyPlan')
+        for checkbox in self.page.locator('[data-plan-step]').all():
+            checkbox.check()
+        self.page.click('#archiveStudyOutcome')
+        self.assertIn('至少10个字', self.page.locator('#studyArchiveStatus').inner_text())
+        self.assertIsNone(self.page.evaluate("localStorage.getItem('xb2080_confirmed_learning_v1')"))
+        self.page.fill('#studyOutcome', '我观察了三个地点的日照差异，下一步会增加下午时段的对照记录。')
+        self.page.click('#archiveStudyOutcome')
+        self.page.click('#archiveStudyOutcome')
+        self.assertIn('无需重复', self.page.locator('#studyArchiveStatus').inner_text())
+        self.page.reload()
+        self.go('growth')
+        self.assertEqual(self.page.locator('#learningEvidenceList article').count(), 1)
+        self.assertIn('三个地点', self.page.locator('#learningEvidenceList').inner_text())
+        self.assertEqual(self.page.locator('#growthPoints').text_content(), '0')
+        self.page.locator('#learningEvidenceList button').click()
+        self.page.reload()
+        self.go('growth')
+        self.assertEqual(self.page.locator('#learningEvidenceList article').count(), 0)
+
     def test_learning_trace_captured_once(self):
         self.go('learning')
         self.page.locator('[data-learning-feature="think"]').click()
